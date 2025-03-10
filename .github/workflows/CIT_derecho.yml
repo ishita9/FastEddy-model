@@ -10,7 +10,7 @@ on:
     branches: 
       - feature_CIT 
     paths-ignore:
-      - 'docs/**'
+      #- 'docs/**'
       - '.github/pull_request_template.md'
       - '.github/ISSUE_TEMPLATE/**'
       - '**/README.md'
