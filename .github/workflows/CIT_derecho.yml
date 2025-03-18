@@ -47,9 +47,21 @@ jobs:
           make
 
       # Run FastEddy
+      - name: Submit job of Example 1
+        run: |
+          cd /glade/work/fasteddyrt/actions-runner/_work/FastEddy-model/Example01_NBL
+          qsub -Wblock=true fasteddy_pbs_script_derecho_10steps.sh
+          ls -l output_10steps
+      
       - name: Submit job of Example 2
         run: |
           cd /glade/work/fasteddyrt/actions-runner/_work/FastEddy-model/Example02_CBL
+          qsub -Wblock=true fasteddy_pbs_script_derecho_10steps.sh
+          ls -l output_10steps
+          
+      - name: Submit job of Example 3
+        run: |
+          cd /glade/work/fasteddyrt/actions-runner/_work/FastEddy-model/Example03_SBL
           qsub -Wblock=true fasteddy_pbs_script_derecho_10steps.sh
           ls -l output_10steps
 
