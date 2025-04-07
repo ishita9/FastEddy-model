@@ -1,4 +1,4 @@
-# This is a basic workflow to help you get started with Actions
+# Workflow to run CIT on derecho via self-hosted runner
 
 name: CIT on derecho
 
@@ -36,36 +36,11 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it  v2 or v4? (Julie's example shows v2)
       - uses: actions/checkout@v4
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
-
-      # Compile the FastEddy code
-      - name: Compile FastEddy
+      # Compile and run the FastEddy code via a python script
+      - name: Run CompileRunFastEddy.py
         run: |
-          cd SRC/FEMAIN
-          module load cuda
-          make clean
-          make
-
-      # Run FastEddy
-      - name: Submit job of Example 1
-        run: |
-          cd /glade/work/fasteddyrt/actions-runner/_work/FastEddy-model/Example01_NBL
-          qsub -Wblock=true fasteddy_pbs_script_derecho_10steps.sh
-          ls -l output_10steps
-      
-      - name: Submit job of Example 2
-        run: |
-          cd /glade/work/fasteddyrt/actions-runner/_work/FastEddy-model/Example02_CBL
-          qsub -Wblock=true fasteddy_pbs_script_derecho_10steps.sh
-          ls -l output_10steps
-          
-      - name: Submit job of Example 3
-        run: |
-          cd /glade/work/fasteddyrt/actions-runner/_work/FastEddy-model/Example03_SBL
-          qsub -Wblock=true fasteddy_pbs_script_derecho_10steps.sh
-          ls -l output_10steps
+          cd ..
+          ./CompileRunFastEddy.py -c derecho_cit.json
 
       # Run pytest on the results of the FastEddy run
       - name: Run pytest
