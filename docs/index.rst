@@ -15,6 +15,9 @@ and multiscale, turbulence-resolving, atmospheric boundary layer
 modeling into local scale weather prediction or actionable science and
 engineering applications.
 
+Citations
+---------
+
 The FastEddy code is located in an open, public
 `GitHub FastEddy-model repository <https://github.com/NCAR/FastEddy-model>`_.
 FastEddy should be cited as shown here:
@@ -25,11 +28,23 @@ FastEddy should be cited as shown here:
   |   https://doi.org/10.1029/2020MS002100
 
 
+Contributing Authors
+--------------------
+
+The following authors have contributed to this documentation of FastEddy:
+
+* Jeremy Sauer
+* Domingo Muñoz-Esparza
+* Eric Hendricks
+* Julie Prestopnik
+  
+  
 .. toctree::
    :hidden:
 
    release_notes.rst
    run_ncar_hpcs.rst
+   run_amd_gpus.rst
    downloads.rst
    Tutorials/index
    publications.rst
