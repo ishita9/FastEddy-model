@@ -7,11 +7,64 @@ Created on May 14, 2025
 Script(s) to load, merge, validate YAML files for FastEddy for CIT purposes.
 
 '''
+
+import logging
 import os
 import socket
 import yaml
 
-known_hosts = ['derecho']
+# Some useful "constants"
+ACCOUNT = 'account'
+BATCHSTEPS = 'batchsteps'
+CASPER = 'casper'
+COMMAND = 'command'
+COMPILE = 'compile'
+DEFAULT_YML = 'tests/config/default.yml'
+DERECHO = 'derecho'
+DOE_OLCF = 'deo_olcf'
+ECONOMY = 'economy'
+ENABLED = 'enabled'
+ENVIRONMENT = 'environment'
+ENVIRONMENTS_PATH = 'tests/config/environments'
+EXAMPLES = 'examples'
+EXECUTION = 'execution'
+FRONTIER = 'frontier'
+HOSTNAME = 'hostname'
+IN_FILE_EXT = '.in'
+JOB_NAME = 'job_name'
+JOIN_OUTPUT = 'join_output'
+LAUNCHER = 'launcher'
+MACHINE = 'machine'
+MPIEXEC = 'mpiexec'
+MPIRUN = 'mpirun'
+MPI_RANKS = 'mpi_ranks'
+NSF_NCAR = 'nsf_ncar'
+OUTPUT_DIR = 'output_dir'
+OUTPUTFREQ = 'outputfreq'
+PATHS = 'paths'
+PBS = 'pbs'
+PREMIUM = 'premium'
+PRIORITY = 'priority'
+QUEUE = 'queue'
+REGULAR = 'regular'
+REPO_ROOT = 'repo_root'
+SET_GPU_RANK = 'set_gpu_rank'
+SCHEDULER = 'scheduler'
+SLURM = 'slurm'
+SUMMIT = 'summit'
+TEST_CASES = 'test_cases'
+TEST_SUITES_PATH = 'tests/test_suites'
+TIMESTEPS = 'timesteps'
+TUTORIALS = 'tutorials'
+WALLTIME = 'walltime'
+YML_EXT = '.yml'
+
+# Lists of valid values for particular keys
+VALID_COMMANDS = [MPIRUN, MPIEXEC]
+VALID_ENVIRONMENTS = [NSF_NCAR, DOE_OLCF]
+VALID_LAUNCHERS = [SET_GPU_RANK]
+VALID_PRIORITIES = [REGULAR, PREMIUM, ECONOMY]
+VALID_QUEUES = [CASPER, DERECHO]
 
 def load_and_merge_config(config_fn, suite): 
     """Load and merge the configuration files for the suite of tests.
@@ -26,94 +79,118 @@ def load_and_merge_config(config_fn, suite):
     Returns a dictionary of configuration values
     """
     
+    logger = logging.getLogger(__name__)
+    
     # Load the specified config file.  Even though this comes last in the merge, we need a few things from it 
     # to start with, such as the repo_location
     with open(config_fn) as config_file:
         specified_config = yaml.load(config_file, Loader=yaml.SafeLoader)
     
-    print('specified_config:', specified_config)
+    logger.info('specified_config: ' + str(specified_config))
     
-    repo_root = specified_config['paths']['repo_root']
-    print('repo_root:', repo_root)
+    try:
+        repo_root = specified_config[PATHS][REPO_ROOT]
+    except KeyError:
+        logger.info('Required configuration key not found: ' + PATHS + '.' + REPO_ROOT)
+        exit(1)
+    logger.info(REPO_ROOT + ': ' + str(repo_root))
+    
+    # Check that the repo_root exists before using it
+    if not os.path.isdir(repo_root):
+        logger.info(REPO_ROOT + ' ' + ' does not exist.  Stopping.')
+        exit(1)
     
     # 1. Now load the default.yml, now that we know where to find it
-    default_config_path = os.path.join(repo_root, 'tests/config/default.yml')
+    default_config_path = os.path.join(repo_root, DEFAULT_YML)
     with open(default_config_path) as default_config_file:
         default_config = yaml.load(default_config_file, Loader=yaml.SafeLoader)
     
-    print('default_config:', default_config)
+    logger.info('default_config: ' + str(default_config))
     
     # Merge the specified config onto the default.  Even though it will be merged again at the end, we want to handle
     # the possible over-rides of environment and/or scheduler
     merged_config = merge_configs(default_config, specified_config)
+    logger.info('(preliminary) merged_config: ' + str(merged_config))
     
-    print('(prelminary) merged_config:', merged_config)
+    try:
+        environment = merged_config[ENVIRONMENT]
+    except KeyError:
+        logger.info('Required configuration key not found: ' + ENVIRONMENT)
+        exit(2)
+    logger.info(ENVIRONMENT + ': ' + str(environment))
     
-    environment = merged_config['environment']
-    scheduler = merged_config['scheduler']
-    
-    print('environment:', environment)
-    print('scheduler:', scheduler)
+    try:
+        scheduler = merged_config[SCHEDULER]
+    except KeyError:
+        logger.info('Required configuration key not found: ' + SCHEDULER)
+        exit(3)
+    logger.info(SCHEDULER + ': ' + str(scheduler))
     
     # 2. Load and merge the scheduler config
-    if len(scheduler) < 4 or scheduler[-4] != '.yml':
-        scheduler += '.yml'
-    scheduler_config_path = os.path.join(repo_root, 'tests/config/environments', environment, 'scheduler', scheduler)
-    print('scheduler_config_path:', scheduler_config_path)
+    if len(scheduler) < 4 or scheduler[-4] != YML_EXT:
+        scheduler += YML_EXT
+    scheduler_config_path = os.path.join(repo_root, ENVIRONMENTS_PATH, environment, SCHEDULER, scheduler)
+    logger.info('scheduler_config_path: ' + scheduler_config_path)
     with open(scheduler_config_path) as scheduler_config_file:
         scheduler_config = yaml.load(scheduler_config_file, Loader=yaml.SafeLoader)
         
-    print('scheduler_config:', scheduler_config)
+    logger.info('scheduler_config: ' + str(scheduler_config))
     
     # Merge default and scheduler configs
     merged_config = merge_configs(default_config, scheduler_config)
-    print('merged_config:', merged_config)
+    logger.info('merged_config: ' + str(merged_config))
     
     # 3. Get the hostname  and load and merge the machine config
     hostname = socket.gethostname()
-    print('hostname:', hostname)
-    if len(hostname) >= 7 and hostname[:7] == 'derecho':
-        host = 'derecho'
-    elif len(hostname) >= 6 and hostname[:6] == 'casper':
-        host = 'casper'
-    elif len(hostname) >= 6 and hostname[:6] == 'summit':
-        host = 'summit'
-    elif len(hostname) >= 8 and hostname[:8] == 'frontier':
-        host = 'frontier'
+    logger.info(HOSTNAME + ': ' + hostname)
+    if len(hostname) >= 7 and hostname[:7] == DERECHO:
+        host = DERECHO
+    elif len(hostname) >= 6 and hostname[:6] == CASPER:
+        host = CASPER
+    elif len(hostname) >= 6 and hostname[:6] == SUMMIT:
+        host = SUMMIT
+    elif len(hostname) >= 8 and hostname[:8] == FRONTIER:
+        host = FRONTIER
     else: # Default to enable some initial testing on other machines such as eldorado
-        host = 'derecho'
+        host = DERECHO
     
-    print('host:', host)
-    host_yml = host + '.yml'
+    logger.info('host: ' + host)
+    host_yml = host + YML_EXT
     
     # Merge in the machine config
-    machine_config_path = os.path.join(repo_root, 'tests/config/environments', environment, 'machine', host_yml)
+    machine_config_path = os.path.join(repo_root, ENVIRONMENTS_PATH, environment, MACHINE, host_yml)
     with open(machine_config_path) as machine_config_file:
         machine_config = yaml.load(machine_config_file, Loader=yaml.SafeLoader)
         
-    print('machine_config:', machine_config)
+    logger.info('machine_config ' + str(machine_config))
     
     # Merge machine config into merged config
     merged_config = merge_configs(merged_config, machine_config)
-    print('merged_config:', merged_config)
+    logger.info('merged_config ' + str(merged_config))
     
     # 4. Load the suite, if specified
-    print('suite:', suite)
+    logger.info('suite: ' + suite)
     
     # Is there always going to be one?  I'm thinking it should be optional, but TBD, needs discussion.
     if len(suite) > 0:
-        suite_yml = suite + '.yml'
-        suite_config_path = machine_config_path = os.path.join(repo_root, 'tests/test_suites', suite_yml)
+        suite_yml = suite + YML_EXT
+        suite_config_path = machine_config_path = os.path.join(repo_root, TEST_SUITES_PATH, suite_yml)
         with open(suite_config_path) as suite_config_file:
             suite_config = yaml.load(suite_config_file, Loader=yaml.SafeLoader)
         
         # Merge suite config into merged config
         merged_config = merge_configs(merged_config, suite_config)
-        print('merged_config (with suite):', merged_config)
+        logger.info('merged_config (with suite): ' + str(merged_config))
         
     # 5. Merge the specified config into the merged config
     merged_config = merge_configs(merged_config, specified_config)
-    print('merged_config (after final merge of the specified config):', merged_config)
+    logger.info('merged_config (after final merge of the specified config): ' + str(merged_config))
+    
+    # Expand any environment variables in any of the paths
+    for path in merged_config[PATHS].keys():
+        merged_config[PATHS][path] = os.path.expandvars(merged_config[PATHS][path])
+    
+    logger.info('merged_config after expanding environment variables in paths: ' + str(merged_config))
     
     return merged_config
     
@@ -130,10 +207,6 @@ def merge_configs(base, override):
             # Add the new key/value pair to the base dictionary
             base[key] = override[key]
     return base
-    
-    
-def create_files_for_testcase(test_dict):
-    pass
 
 
 def validate_cfg(config, required_keys):
@@ -142,9 +215,13 @@ def validate_cfg(config, required_keys):
     required_keys is a list of keys, each potentially being nested and separated by periods.  Example: paths.repo_root
     """
     
+    logger = logging.getLogger(__name__)
+    
+    logger.info('Validating configuration.')
+    
     # Iterate over the "compound" keys
     for compound_key in required_keys:
-        print(compound_key)
+        logger.info('Required key: ' + compound_key)
         # Get a list of the keys separated by periods
         keys = compound_key.split('.')
         # Initialize value to the whole dictionary
@@ -155,14 +232,176 @@ def validate_cfg(config, required_keys):
                 # Get the value of the key, which may be another dictionary
                 value = value[key] 
             else:
-                print('Required key not found:', compound_key)
-                exit(0)
-        print('Value of', compound_key, value)
+                logger.info('Required key not found: ' + compound_key)
+                exit(4)
+        logger.info('Value of ' + compound_key + str(value))
+    
+    # Check that there is at lease one test case
+    try:
+        test_cases = config[TEST_CASES]
+    except KeyError:
+        logger.info('Required configuration key not found: ' + TEST_CASES)
+        exit(5)
+    num_test_cases = len(test_cases)
+    if num_test_cases < 1:
+        logger.info('No test cases specified. Stopping.')
+        exit(5)
+    else:
+        logger.info(str(num_test_cases) + ' test cases specified.')
         
-        
-    # More validations coming...
-    # Potential checks:
-    #  Check that number of tests is at least one.
     #  Check that there is a .in file for each test in tutorials/examples in the repo.
-    #  Maybe check that the output_dir exists or can be created?
+    paths = config[PATHS]
+    repo_root = paths[REPO_ROOT]
+    examples_path = os.path.join(repo_root, TUTORIALS, EXAMPLES)
+    any_missing = False
+    for test_case in test_cases:
+        for key in test_case.keys(): # There will be only one key for the test case, which is its name
+            filepath = os.path.join(examples_path, key + IN_FILE_EXT)
+            logger.info('Checking for existence of file ' + filepath)
+            if not os.path.exists(filepath):
+                any_missing = True
+                logger.info('Necessary file missing: ' + filepath)
+    if any_missing:
+        logger.info('Stopping.')
+        exit(6)
+    
+    # Already checked that repo_root is a directory in load_and_merge_config.
+    
+    # Check that the output_dir exists or can be created
+    output_dir = paths[OUTPUT_DIR]
+    if not os.path.isdir(output_dir):
+        logger.info('Output dir ' + output_dir + ' does not exist.  Will try to create it.')
+        # Doesn't exist (yet), but can we create it?
+        try:
+            os.makedirs(output_dir)
+        except:
+            logger.info('Could not create output directory.  Stopping.')
+            exit(7)
+    
+    #   compile_enabled - check that it's a bool
+    compile_enabled = config[COMPILE][ENABLED]
+    if not type(compile_enabled) == bool:
+        logger.info('Value of ' + COMPILE + '.' + ENABLED + ' is not a bool type (true or false): ' + compile_enabled)
+        exit(8)
+            
+    # Check execution values.
+    #    mpi_ranks - make sure it's an int
+    mpi_ranks = config[EXECUTION][MPI_RANKS]
+    if not type(mpi_ranks) == int:
+        logger.info('Value of ' + EXECUTION + '.' + MPI_RANKS + ' is not an int type: ' + mpi_ranks)
+        exit(9)
+            
+    #    launcher - check against list of valid values
+    launcher = config[EXECUTION][LAUNCHER]
+    if not launcher in VALID_LAUNCHERS:
+        logger.info('Invalid value of ' + EXECUTION + '.' + LAUNCHER + ': ' + launcher)
+        
+    scheduler = config[SCHEDULER]
+    
+    if scheduler == PBS:
+        #    pbs
+        #       account - check that it's a string
+        account = config[EXECUTION][PBS][ACCOUNT]
+        if not type(account) == str:
+            logger.info('Value of ' + EXECUTION + '.' + PBS + '.' + ACCOUNT + ' is not a string type: ' + account)
+            exit(10)
+            
+        #       job_name - check that it's a string
+        job_name = config[EXECUTION][PBS][JOB_NAME]
+        if not type(job_name) == str:
+            logger.info('Value of ' + EXECUTION + '.' + PBS + '.' + JOB_NAME + ' is not a string type: ' + job_name)
+            exit(11)
+            
+        #       walltime - check that it's a string, with 3 integers separated by colons, each in proper range
+        walltime = config[EXECUTION][PBS][WALLTIME]
+        if not type(job_name) == str:
+            logger.info('Value of ' + EXECUTION + '.' + PBS + '.' + WALLTIME + ' is not a string type: ' + walltime)
+            exit(12)
+        else:
+            # Check some more things...
+            components = walltime.split(':')
+            if len(components) != 3:
+                logger.info('Value of ' + EXECUTION + '.' + PBS + '.' + WALLTIME + ' does not appear to be in the correct format of "HH:MM:SS": ' + walltime)
+                exit(13)
+            else:
+                # Check that the components look like ints
+                for i in range(len(components)):
+                    comp = components[i]
+                    try:
+                        comp_val = int(comp)
+                        if (i != 0) and (comp_val > 59 or comp_val < 0):
+                            logger.info('Value of ' + EXECUTION + '.' + PBS + '.' + WALLTIME + ' does not appear to be in the correct format of "HH:MM:SS": ' + walltime + '. (MM or SS is not between 0 and 59)')
+                            exit(13)
+                    except:
+                        logger.info('Value of ' + EXECUTION + '.' + PBS + '.' + WALLTIME + ' does not appear to be in the correct format of "HH:MM:SS": ' + walltime)
+                        exit(13)
+        
+        #       queue - check against list of valid values
+        queue = config[EXECUTION][PBS][QUEUE]
+        if not queue in VALID_QUEUES:
+            logger.info('Invalid value of ' + EXECUTION + '.' + PBS + ': ' + QUEUE)
+            exit(14)
+        
+        #       join_output - check that it's a bool
+        join_output = config[EXECUTION][PBS][JOIN_OUTPUT]
+        if not type(join_output) == bool:
+            logger.info('Value of ' + EXECUTION + '.' + PBS  + '.' + JOIN_OUTPUT + ' is not a bool type (true or false): ' + join_output)
+            exit(15)
+        
+        #       priority - check against list of valid values
+        priority = config[EXECUTION][PBS][PRIORITY]
+        if not priority in VALID_PRIORITIES:
+            logger.info('Invalid value of ' + EXECUTION + '.' + PBS  + '.' + PRIORITY + ': ' + priority)
+            exit(16)
+        
+        #       command - check against list of valid values
+        command = config[EXECUTION][PBS][COMMAND]
+        if not command in VALID_COMMANDS:
+            logger.info('Invalid value of ' + EXECUTION + '.' + PBS  + '.' + COMMAND + ': ' + command)
+            exit(17)
+        
+    elif scheduler == SLURM:
+        logger.info(SLURM + 'scheduler not yet implemented. Stopping.')
+        exit(18)
+    else:
+        logger.info('Unsupported scheduler: ' + scheduler + '. Stopping.')
+        exit(18)
+        
+    #   environment - check against list of valid values
+    environment = config[ENVIRONMENT]
+    if not environment in VALID_ENVIRONMENTS:
+        logger.info('Invalid value of ' + ENVIRONMENT + ': ' + environment)
+        exit(19)
+    elif environment == DOE_OLCF:
+        logger.info(DOE_OLCF + 'environment not yet implemented. Stopping.')
+        exit(19)
+        
+    #   timesteps - make sure it's an int
+    try:
+        timesteps = config[TIMESTEPS]
+        if not type(timesteps) == int:
+            logger.info('Value of ' + TIMESTEPS + ' is not an int type: ' + timesteps)
+            exit(20)
+    except KeyError:
+        pass # Not required
+        
+    #   outputfreq - make sure it's an int
+    try:
+        outputfreq = config[OUTPUTFREQ]
+        if not type(outputfreq) == int:
+            logger.info('Value of ' + OUTPUTFREQ + ' is not an int type: ' + outputfreq)
+            exit(21)
+    except KeyError:
+        pass # Not required
+        
+    #   batchsteps - make sure it's an int
+    try:
+        batchsteps = config[BATCHSTEPS]
+        if not type(batchsteps) == int:
+            logger.info('Value of ' + BATCHSTEPS + ' is not an int type: ' + batchsteps)
+            exit(22)
+    except KeyError:
+        pass # Not required
+        
+    logger.info('Configuration is OK.')
         
