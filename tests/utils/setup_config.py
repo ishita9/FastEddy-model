@@ -21,6 +21,7 @@ COMMAND = 'command'
 COMPILE = 'compile'
 DEFAULT_YML = 'tests/config/default.yml'
 DERECHO = 'derecho'
+DEVELOP = 'develop'
 DOE_OLCF = 'deo_olcf'
 ECONOMY = 'economy'
 ENABLED = 'enabled'
@@ -35,6 +36,7 @@ JOB_NAME = 'job_name'
 JOIN_OUTPUT = 'join_output'
 LAUNCHER = 'launcher'
 MACHINE = 'machine'
+MAIN = 'main'
 MPIEXEC = 'mpiexec'
 MPIRUN = 'mpirun'
 MPI_RANKS = 'mpi_ranks'
@@ -43,6 +45,7 @@ OUTPUT_DIR = 'output_dir'
 OUTPUTFREQ = 'outputfreq'
 PATHS = 'paths'
 PBS = 'pbs'
+PREEMPT = 'preempt'
 PREMIUM = 'premium'
 PRIORITY = 'priority'
 QUEUE = 'queue'
@@ -64,7 +67,7 @@ VALID_COMMANDS = [MPIRUN, MPIEXEC]
 VALID_ENVIRONMENTS = [NSF_NCAR, DOE_OLCF]
 VALID_LAUNCHERS = [SET_GPU_RANK]
 VALID_PRIORITIES = [REGULAR, PREMIUM, ECONOMY]
-VALID_QUEUES = [CASPER, DERECHO]
+VALID_QUEUES = [CASPER, DERECHO, MAIN, PREEMPT, DEVELOP]
 
 def load_and_merge_config(config_fn, suite): 
     """Load and merge the configuration files for the suite of tests.
@@ -186,11 +189,34 @@ def load_and_merge_config(config_fn, suite):
     merged_config = merge_configs(merged_config, specified_config)
     logger.info('merged_config (after final merge of the specified config): ' + str(merged_config))
     
-    # Expand any environment variables in any of the paths
+    # 6. Expand any environment variables in any of the paths
     for path in merged_config[PATHS].keys():
         merged_config[PATHS][path] = os.path.expandvars(merged_config[PATHS][path])
     
     logger.info('merged_config after expanding environment variables in paths: ' + str(merged_config))
+    
+    # 7. The following may be specified at the top level, and also within each test case:
+    #    timesteps
+    #    outputfreq
+    #    batchstps
+    #   
+    #    Roll this up into each test case, then delete the ones at the top level, so that the rest of the code only needs
+    #    to look for them in one place (in each test case).  If specified at the test case level, that over-rides the 
+    #    more general value at the top level, so only copy the top level value into a test case if it doesn't have that
+    #    key already.
+    for key in [TIMESTEPS, OUTPUTFREQ, BATCHSTEPS]:
+        if key in merged_config:
+            for test_case in merged_config[TEST_CASES]:
+                for test_case_name in test_case.keys(): # There will be only one key for the test case, which is its name
+                    test_case_config = test_case[test_case_name]
+                    # See if 
+                    if not key in test_case_config:
+                        # Add the top level value to the config of the test case
+                        test_case_config[key] = merged_config[key]
+            # Now remove the top level key/value pair
+            del merged_config[key]
+    
+    logger.info('merged_config after rolling up steps values to test cases: ' + str(merged_config))
     
     return merged_config
     
