@@ -1,6 +1,6 @@
 paths:
   repo_root: "/glade/work/.../FastEddy-model"              # JTH probably useless.  Needs to be known to find default.yml!
-  output_dir: "/glade/scratch/$USER/fasteddy_results"
+  output_dir: "/glade/derecho/scratch/$USER/fasteddy_results"
 
 compile:
   enabled: true
